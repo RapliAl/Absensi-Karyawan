@@ -1,0 +1,28 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@config 'tailwind.config.js';
+
+.fi-ta-text {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+}
+
+.fi-btn {
+    min-height: 60px !important;
+    min-width: 140px !important;
+    font-size: 1.2rem !important;
+    font-weight: bold !important;
+    padding: 12px 24px !important;
+}
+
+@media (max-width: 768px) {
+    .fi-ta-text {
+        font-size: 1.2rem !important;
+    }
+    
+    .fi-btn {
+        min-height: 50px !important;
+        font-size: 1rem !important;
+    }
+}
