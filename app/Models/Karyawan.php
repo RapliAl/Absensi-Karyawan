@@ -2,31 +2,34 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Carbon\Carbon;
 
 class Karyawan extends Model
 {
-    protected $fillable = [
-        'nama',
-    ];
+    protected $fillable = ['nama', 'nip'];
 
-    public function absensis()
+    public function absensis(): HasMany
     {
         return $this->hasMany(Absensi::class);
     }
 
-    public function absensiHariIni()
+    public function absensiHariIni(): HasOne
     {
-        return $this->hasOne(Absensi::class)->whereDate('tanggal', today());
+        return $this->hasOne(Absensi::class)
+                   ->whereDate('tanggal', today());
     }
 
-    public function getStatusHariIniAttribute()
+    // Accessor untuk status hari ini
+    public function getStatusHariIniAttribute(): ?string
     {
-        return $this->absensiHariIni?->status ?? null;
+        $absensi = $this->absensiHariIni;
+        return $absensi ? $absensi->status : null;
     }
 
-    public function getAbsen()
+    public function getAbsen(): bool
     {
         return $this->absensiHariIni()->exists();
     }
@@ -35,9 +38,9 @@ class Karyawan extends Model
     {
         $startOfMonth = Carbon::now()->startOfMonth();
         $endOfMonth = Carbon::now()->endOfMonth();
-
+        
         return $this->absensis()
-            ->whereBetween('tanggal', [$startOfMonth, $endOfMonth])
-            ->get();
+                   ->whereBetween('tanggal', [$startOfMonth, $endOfMonth])
+                   ->get();
     }
 }

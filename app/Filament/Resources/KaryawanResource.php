@@ -18,7 +18,8 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Notifications\Notification;
-
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
 class KaryawanResource extends Resource
 {
     protected static ?string $model = Karyawan::class;
@@ -47,7 +48,7 @@ class KaryawanResource extends Resource
                     ->sortable(),
                 TextColumn::make('status')
                     ->label('Status')
-                    ->getStateUsing(fn (Karyawan $record): string => $record->status ?? '-')
+                    ->getStateUsing(fn (Karyawan $record): string => $record->absensiHariIni?->status ?? '-')
                     ->colors([
                         'secondary' => '-',
                         'success' => 'Hadir',
@@ -71,42 +72,171 @@ class KaryawanResource extends Resource
                     ->visible(fn (Karyawan $record) => !$record->getAbsen())
                     ->requiresConfirmation()
                     ->modalHeading('Konfirmasi Kehadiran')
-                    ->modalSubheading(fn($record) => "Apakah {$record->nama} Hadir Hari Ini?")
-                    ->action(fn(Karyawan $record) => static::markAbsensi($record, 'hadir')),
+                    ->modalDescription(fn($record) => "Apakah {$record->nama} Hadir Hari Ini?")
+                    ->action(function (Karyawan $record) {
+                        try {
+                            $existingAbsensi = Absensi::where('karyawan_id', $record->karyawan_id)
+                                ->whereDate('tanggal', today())
+                                ->first();
+                            
+                            if ($existingAbsensi) {
+                                Notification::make()
+                                    ->title('Anda Sudah Absen!')
+                                    ->warning()
+                                    ->body("Absensi untuk {$record->nama} sudah tercatat hari ini dengan status:" . strtoupper($existingAbsensi->status))
+                                    ->duration(5000)
+                                    ->send();
+
+                                return;
+                            }
+
+                            Absensi::create([
+                                'karyawan_id' => $record->id,
+                                'tanggal' => today(),
+                                'status' => 'Hadir',
+                                'jam_absen' => now()->format('H:i:s'),
+                            ]);
+
+                            Notification::make()
+                                ->title ('Absensi Berhasil!')
+                                ->success()
+                                ->body("Terima Kasih {$record->nama}, status hadir telah tercatat pada". now()->format('H:i'))
+                                ->duration(5000)
+                                ->send();
+                        } catch (QueryException $e) {
+                            Log::error('Data Absensi Gagal Disimpan:' . $e->getMessage());
+
+                            Notification::make()
+                                ->title('Gagal Menyimpan!')
+                                ->body('Terjadi kesalahan database. Silakan coba lagi atau hubungi admin.')
+                                ->danger()
+                                ->duration(10000)
+                                ->send();
+                        } catch (\Exception $e) {
+                            // Handle other errors
+                            Log::error('Absensi General Error: ' . $e->getMessage());
+                            
+                            Notification::make()
+                                ->title('Error!')
+                                ->body('Gagal menyimpan absensi. Silakan coba lagi.')
+                                ->danger()
+                                ->duration(8000)
+                                ->send();
+                        }
+                    }),
                 
-                Action::make('Sakit')
+                Action::make('sakit')
                     ->label('Sakit')
                     ->button()
                     ->color('danger')
                     ->visible(fn (Karyawan $record) => !$record->getAbsen())
                     ->requiresConfirmation()
-                    ->modalHeading('Konfirmasi Kehadiran')
-                    ->modalSubheading(fn($record) => "Apakah {$record->nama} Sakit Hari Ini?")
-                    ->action(fn(Karyawan $record) => static::markAbsensi($record, 'sakit')),
+                    ->modalHeading('Konfirmasi Sakit')
+                    ->modalDescription(fn($record) => "Apakah {$record->nama} SAKIT hari ini?")
+                    ->action(function (Karyawan $record) {
+                        try {
+                            Absensi::create([
+                                'karyawan_id' => $record->id,
+                                'tanggal' => today(),
+                                'status' => 'Sakit',
+                                'jam_absen' => now()->format('H:i:s'),
+                            ]);
+
+                            Notification::make()
+                                ->title('SAKIT TERCATAT!')
+                                ->body("Status SAKIT untuk {$record->nama} telah tercatat")
+                                ->success()
+                                ->duration(8000)
+                                ->send();
+
+                        } catch (\Exception $e) {
+                            Log::error('Absensi Sakit Error: ' . $e->getMessage());
+                            
+                            Notification::make()
+                                ->title('❌ Error!')
+                                ->body('Gagal menyimpan status sakit. Silakan coba lagi.')
+                                ->danger()
+                                ->send();
+                        }
+                    }),
                 
-                Action::make('Izin')
+                Action::make('izin')
                     ->label('Izin')
                     ->button()
                     ->color('warning')
                     ->visible(fn (Karyawan $record) => !$record->getAbsen())
                     ->requiresConfirmation()
-                    ->modalHeading('Konfirmasi Kehadiran')
-                    ->modalSubheading(fn($record) => "Apakah {$record->nama} Izin Hari Ini?")
-                    ->action(fn(Karyawan $record) => static::markAbsensi($record, 'izin'))
+                    ->modalHeading('Konfirmasi Izin')
+                    ->modalDescription(fn($record) => "Apakah {$record->nama} IZIN hari ini?")
+                    ->action(function (Karyawan $record) {
+                        try {
+                            Absensi::create([
+                                'karyawan_id' => $record->id,
+                                'tanggal' => today(),
+                                'status' => 'Izin',
+                                'jam_absen' => now()->format('H:i:s'),
+                            ]);
 
+                            Notification::make()
+                                ->title('📋 IZIN TERCATAT!')
+                                ->body("Status IZIN untuk {$record->nama} telah tercatat")
+                                ->success()
+                                ->duration(8000)
+                                ->send();
+
+                        } catch (\Exception $e) {
+                            Log::error('Absensi Izin Error: ' . $e->getMessage());
+                            
+                            Notification::make()
+                                ->title('❌ Error!')
+                                ->body('Gagal menyimpan status izin. Silakan coba lagi.')
+                                ->danger()
+                                ->send();
+                        }
+                    }),
             ])
             ->headerActions([
                 Action::make('export_hari_ini')
-                    ->label('Download Absensi Hari Ini')
-                    ->icon('heroicon-o-arrow-down-tray')
+                    ->label('📄 Export Hari Ini')
+                    ->icon('heroicon-o-document-arrow-down')
                     ->color('primary')
-                    ->action(fn() => static::exportAbsensiHariIni()),
+                    ->action(function () {
+                        try {
+                            return response()->streamDownload(function () {
+                                echo \Maatwebsite\Excel\Facades\Excel::raw(
+                                    new \App\Exports\AbsensiHarianExport(),
+                                    \Maatwebsite\Excel\Excel::XLSX
+                                );
+                            }, 'absensi_harian_' . today()->format('Y-m-d') . '.xlsx');
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->title('❌ Export Gagal!')
+                                ->body('Gagal mengexport data: ' . $e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
                 
                 Action::make('export_bulan_ini')
-                    ->label('Download Absensi Bulan Ini')
+                    ->label('📊 Export Bulan Ini')
                     ->icon('heroicon-o-calendar-days')
                     ->color('success')
-                    ->action(fn() => static::exportAbsensiBulanIni()),
+                    ->action(function () {
+                        try {
+                            return response()->streamDownload(function () {
+                                echo \Maatwebsite\Excel\Facades\Excel::raw(
+                                    new \App\Exports\AbsensiBulananExport(),
+                                    \Maatwebsite\Excel\Excel::XLSX
+                                );
+                            }, 'absensi_bulanan_' . now()->format('Y-m') . '.xlsx');
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->title('❌ Export Gagal!')
+                                ->body('Gagal mengexport data: ' . $e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
             ])
 
             ->defaultSort('nama')

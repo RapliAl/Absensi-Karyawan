@@ -17,4 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->withSchedule(function(Schedule $schedule) {
+        $schedule->call(function () {
+            $rekapService = new \App\Services\RekapService();
+            $lastMonth = \Carbon\Carbon::now()->subMonth();
+            $rekapService->generateRekapBulanan($lastMonth->month, $lastMonth->year);
+        })->monthlyOn(1, '08:00')->name('generate_rekap_bulanan');
+    })
+    ->create();

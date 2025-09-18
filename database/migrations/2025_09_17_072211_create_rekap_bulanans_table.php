@@ -16,7 +16,7 @@ return new class extends Migration
             $table->integer('bulan');
             $table->integer('tahun');
             $table->string('nama_bulan');
-            $table->integer('total_karyawan')->defaiult(0);
+            $table->integer('total_karyawan')->default(0);
             $table->integer('total_hadir')->default(0);
             $table->integer('total_sakit')->default(0);
             $table->integer('total_izin')->default(0);
