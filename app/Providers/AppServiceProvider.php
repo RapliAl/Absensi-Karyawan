@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use App\Models\Absensi;
+use App\Observers\AbsensiObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +21,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Register observer untuk auto-clear cache widget saat ada perubahan data absensi
+        Absensi::observe(AbsensiObserver::class);
     }
 }

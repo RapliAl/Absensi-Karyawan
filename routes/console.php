@@ -28,3 +28,9 @@ Artisan::command('absensi:rekap-bulanan {--month=} {--year=} {--current} {--last
     $rekap = $rekapService->generateRekapBulanan($month, $year);
 
 })->purpose('Generate rekap absensi bulanan');
+
+// Schedule untuk refresh dashboard widget setiap jam 8 pagi
+app(Schedule::class)->command('dashboard:refresh-widget')
+    ->dailyAt('08:00')
+    ->timezone('Asia/Jakarta')
+    ->description('Refresh dashboard widget absensi setiap jam 8 pagi');

@@ -7,9 +7,9 @@ use App\Models\Absensi;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Carbon\Carbon;
 
 class RekapBulananExport implements WithMultipleSheets
@@ -33,7 +33,7 @@ class RekapBulananExport implements WithMultipleSheets
 class RekapSummarySheet implements FromCollection, WithHeadings, WithStyles, WithTitle
 {
     protected $rekap;
-    
+
     public function __construct(RekapBulanan $rekap)
     {
         $this->rekap = $rekap;
@@ -41,13 +41,13 @@ class RekapSummarySheet implements FromCollection, WithHeadings, WithStyles, Wit
 
     public function collection()
     {
-        return collect ([
+        return collect([
             [
-                'Bulan' => $this->rekap->bulan,
-                'Tahun' => $this->rekap->tahun,
-                'Total Hadir' => $this->rekap->total_hadir,
-                'Total Sakit' => $this->rekap->total_sakit,
-                'Total Izin' => $this->rekap->total_izin,
+                'periode' => $this->rekap->periode,
+                'total_karyawan' => $this->rekap->total_karyawan,
+                'total_hadir' => $this->rekap->total_hadir,
+                'total_sakit' => $this->rekap->total_sakit,
+                'total_izin' => $this->rekap->total_izin,
             ]
         ]);
     }
@@ -55,17 +55,14 @@ class RekapSummarySheet implements FromCollection, WithHeadings, WithStyles, Wit
     public function headings(): array
     {
         return [
-            'Bulan',
-            'Tahun',
-            'Total Hadir',
-            'Total Sakit',
-            'Total Izin',
+            'PERIODE', 'TOTAL KARYAWAN', 
+            'TOTAL HADIR', 'TOTAL SAKIT', 'TOTAL IZIN',
         ];
     }
 
     public function title(): string
     {
-        return 'Rekap Bulanan Absensi';
+        return 'Summary';
     }
 
     public function styles(Worksheet $sheet)
@@ -97,26 +94,18 @@ class RekapDetailSheet implements FromCollection, WithHeadings, WithStyles, With
             ->get()
             ->map(function ($absensi) {
                 return [
-                    'ID' => $absensi->karyawan->id,
-                    'Nama' => $absensi->karyawan->nama,
-                    'Tanggal' => $absensi->tanggal->format('d/m/Y'),
-                    'Hari' => $absensi->tanggal->locale('id')->dayName,
-                    'Status' => strtoupper($absensi->status),
-                    'Jam Absen' => $absensi->jam_absen->format('H:i'),
+                    'nama' => $absensi->karyawan->nama,
+                    'tanggal' => $absensi->tanggal->format('d/m/Y'),
+                    'hari' => $absensi->tanggal->locale('id')->dayName,
+                    'status' => strtoupper($absensi->status),
+                    'jam_absen' => $absensi->jam_absen->format('H:i'),
                 ];
             });
     }
 
     public function headings(): array
     {
-        return [
-            'ID',
-            'Nama',
-            'Tanggal',
-            'Hari',
-            'Status',
-            'Jam Absen',
-        ];
+        return ['NAMA', 'TANGGAL', 'HARI', 'STATUS', 'JAM ABSEN'];
     }
 
     public function title(): string

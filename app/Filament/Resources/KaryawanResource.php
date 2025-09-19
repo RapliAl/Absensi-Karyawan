@@ -24,7 +24,9 @@ class KaryawanResource extends Resource
 {
     protected static ?string $model = Karyawan::class;
     protected static ?string $navigationIcon = 'heroicon-o-users';
-    protected static ?string $modelLabel = 'Absensi Harian';
+
+    protected static ?string $modelLabel = "Absensi";
+    
     protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
@@ -48,9 +50,9 @@ class KaryawanResource extends Resource
                     ->sortable(),
                 TextColumn::make('status')
                     ->label('Status')
-                    ->getStateUsing(fn (Karyawan $record): string => $record->absensiHariIni?->status ?? '-')
+                    ->getStateUsing(fn (Karyawan $record): string => $record->absensiHariIni?->status ?? 'Tidak Hadir')
                     ->colors([
-                        'secondary' => '-',
+                        'secondary' => 'Tidak Hadir',
                         'success' => 'Hadir',
                         'warning' => 'Izin',
                         'danger' => 'Sakit',
@@ -100,7 +102,7 @@ class KaryawanResource extends Resource
                             Notification::make()
                                 ->title ('Absensi Berhasil!')
                                 ->success()
-                                ->body("Terima Kasih {$record->nama}, status hadir telah tercatat pada". now()->format('H:i'))
+                                ->body("Terima Kasih {$record->nama}, status hadir telah tercatat pada : ". now()->format('H:i'))
                                 ->duration(5000)
                                 ->send();
                         } catch (QueryException $e) {
@@ -197,7 +199,7 @@ class KaryawanResource extends Resource
             ])
             ->headerActions([
                 Action::make('export_hari_ini')
-                    ->label('📄 Export Hari Ini')
+                    ->label(' Export Hari Ini')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('primary')
                     ->action(function () {
@@ -218,7 +220,7 @@ class KaryawanResource extends Resource
                     }),
                 
                 Action::make('export_bulan_ini')
-                    ->label('📊 Export Bulan Ini')
+                    ->label('Export Bulan Ini')
                     ->icon('heroicon-o-calendar-days')
                     ->color('success')
                     ->action(function () {
