@@ -46,6 +46,10 @@ class AbsensiObserver
             
         $cacheKey = "dashboard_absensi_stats_{$tanggal}";
         
+        // Log sebelum clear cache
+        Log::info("AbsensiObserver: Attempting to clear cache key: {$cacheKey}");
+        $wasCached = Cache::has($cacheKey);
+        
         Cache::forget($cacheKey);
         
         // Clear juga untuk hari ini dan kemarin untuk memastikan
@@ -54,5 +58,12 @@ class AbsensiObserver
         
         Cache::forget("dashboard_absensi_stats_{$today}");
         Cache::forget("dashboard_absensi_stats_{$yesterday}");
+        
+        // Log hasil
+        Log::info("AbsensiObserver: Cache cleared. Was cached: " . ($wasCached ? 'YES' : 'NO') . ", Keys cleared: {$cacheKey}, {$today}, {$yesterday}");
+        
+        // Force clear all dashboard cache sebagai fallback
+        Cache::flush();
+        Log::info("AbsensiObserver: All cache flushed as fallback");
     }
 }

@@ -6,6 +6,7 @@ use App\Filament\Resources\KaryawanResource\Pages;
 use App\Filament\Resources\KaryawanResource\RelationManagers;
 use App\Models\Karyawan;
 use App\Models\Absensi;
+use App\Exports\RekapAbsensiExport;
 use Filament\Tables\Actions\Action;
 use Filament\Forms;
 use Filament\Forms\Components\Select;
@@ -20,10 +21,12 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Notifications\Notification;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
+use Maatwebsite\Excel\Facades\Excel;
+use Carbon\Carbon;
 class KaryawanResource extends Resource
 {
     protected static ?string $model = Karyawan::class;
-    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static ?string $navigationIcon = 'heroicon-o-calendar';
 
     protected static ?string $modelLabel = "Absensi";
     
@@ -56,7 +59,9 @@ class KaryawanResource extends Resource
                         'success' => 'Hadir',
                         'warning' => 'Izin',
                         'danger' => 'Sakit',
-                    ]),
+                    ])
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('absensiHariIni.jam_absen')
                     ->label('Jam Absen')
                     ->dateTime('H:i')
@@ -197,48 +202,44 @@ class KaryawanResource extends Resource
                         }
                     }),
             ])
-            ->headerActions([
-                Action::make('export_hari_ini')
-                    ->label(' Export Hari Ini')
-                    ->icon('heroicon-o-document-arrow-down')
-                    ->color('primary')
-                    ->action(function () {
-                        try {
-                            return response()->streamDownload(function () {
-                                echo \Maatwebsite\Excel\Facades\Excel::raw(
-                                    new \App\Exports\AbsensiHarianExport(),
-                                    \Maatwebsite\Excel\Excel::XLSX
-                                );
-                            }, 'absensi_harian_' . today()->format('Y-m-d') . '.xlsx');
-                        } catch (\Exception $e) {
-                            Notification::make()
-                                ->title('❌ Export Gagal!')
-                                ->body('Gagal mengexport data: ' . $e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-                
-                Action::make('export_bulan_ini')
-                    ->label('Export Bulan Ini')
-                    ->icon('heroicon-o-calendar-days')
-                    ->color('success')
-                    ->action(function () {
-                        try {
-                            return response()->streamDownload(function () {
-                                echo \Maatwebsite\Excel\Facades\Excel::raw(
-                                    new \App\Exports\AbsensiBulananExport(),
-                                    \Maatwebsite\Excel\Excel::XLSX
-                                );
-                            }, 'absensi_bulanan_' . now()->format('Y-m') . '.xlsx');
-                        } catch (\Exception $e) {
-                            Notification::make()
-                                ->title('❌ Export Gagal!')
-                                ->body('Gagal mengexport data: ' . $e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+            ->headerActions([    
+                Action::make('export_rekap_bulanan')
+                    ->label('Export Rekap Bulanan')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('warning')
+                    ->form([
+                        Forms\Components\Select::make('bulan')
+                            ->label('Bulan')
+                            ->options([
+                                1 => 'Januari',
+                                2 => 'Februari',
+                                3 => 'Maret',
+                                4 => 'April',
+                                5 => 'Mei',
+                                6 => 'Juni',
+                                7 => 'Juli',
+                                8 => 'Agustus',
+                                9 => 'September',
+                                10 => 'Oktober',
+                                11 => 'November',
+                                12 => 'Desember',
+                            ])
+                            ->default(now()->month)
+                            ->required(),
+                        
+                        Forms\Components\Select::make('tahun')
+                            ->label('Tahun')
+                            ->options(self::getTahunOptions())
+                            ->default(now()->year)
+                            ->required()
+                            ->searchable()
+                            ->placeholder('Pilih Tahun'),
+                    ])
+                    ->action(function (array $data) {
+                        $namaBulan = Carbon::create($data['tahun'], $data['bulan'], 1)->format('F_Y');
+                        return Excel::download(new RekapAbsensiExport($data['bulan'], $data['tahun']),
+                        "Rekap_Absensi_{$namaBulan}.xlsx");
+                    })
             ])
 
             ->defaultSort('nama')
@@ -259,23 +260,48 @@ class KaryawanResource extends Resource
     protected static function markAbsensi(Karyawan $karyawan, string $status): void
     {
         try {
-            Absensi::create([
-                'nama' => $karyawan->nama,
-                'tanggal' => today(),
-                'status' => $status,
-                'jam_absen' => now(),
-            ]);
+            $now = Carbon::now();
+            $workingDate = $now->hour >= 8 ? $now->toDateString() : $now->copy()->subDay()->toDateString();
+            
+            // Cek apakah sudah ada absensi untuk working date ini
+            $existingAbsensi = $karyawan->absensis()
+                ->whereDate('tanggal', $workingDate)
+                ->first();
+            
+            if ($existingAbsensi) {
+                // Update status yang sudah ada
+                $existingAbsensi->update([
+                    'status' => $status,
+                    'jam_absen' => now()->format('H:i:s')
+                ]);
+                $action = 'diupdate';
+            } else {
+                // Buat absensi baru
+                Absensi::create([
+                    'karyawan_id' => $karyawan->id,
+                    'tanggal' => $workingDate,
+                    'status' => $status,
+                    'jam_absen' => now()->format('H:i:s')
+                ]);
+                $action = 'ditambahkan';
+            }
+            
+            // Clear cache widget
+            \Illuminate\Support\Facades\Cache::forget("dashboard_absensi_stats_{$workingDate}");
+            
             Notification::make()
                 ->title('Absensi Berhasil!')
                 ->success()
-                ->body("Terima Kasih {$karyawan->nama}, status '{$status}' telah tercatat pada". now()->format('H:i'))
+                ->body("Terima Kasih {$karyawan->nama}, status '{$status}' telah {$action} untuk tanggal {$workingDate} pada ". now()->format('H:i'))
                 ->duration(5000)
                 ->send();
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error marking absensi: ' . $e->getMessage());
+            
             Notification::make()
                 ->title('Absensi Gagal!')
                 ->danger()
-                ->body('Terjadi kesalahan saat mencatat absensi. Silakan coba lagi.')
+                ->body('Terjadi kesalahan saat mencatat absensi: ' . $e->getMessage())
                 ->duration(5000)
                 ->send();
         }
@@ -305,5 +331,15 @@ class KaryawanResource extends Resource
             'create' => Pages\CreateKaryawan::route('/create'),
             'edit' => Pages\EditKaryawan::route('/{record}/edit'),
         ];
+    }
+
+    private static function getTahunOptions(): array
+    {
+        $startYear = 2025;
+        $currentYear = now()->year;
+        $endYear = $currentYear + 100;
+
+        $years = range($startYear, $endYear);
+        return array_combine($years, $years);
     }
 }

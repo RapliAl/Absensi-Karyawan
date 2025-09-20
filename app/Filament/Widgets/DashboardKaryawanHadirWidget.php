@@ -21,13 +21,15 @@ class DashboardKaryawanHadirWidget extends BaseWidget
         // Debug log
         \Illuminate\Support\Facades\Log::info('DashboardWidget: getStats() called at ' . now());
         
-        // Get current time and target date
-        $today = Carbon::now();
-        $targetDate = $today->hour >= 8 ? $today->toDateString() : $today->subDay()->toDateString();
+        // PERBAIKAN: Logic working date yang benar (tidak mengubah object asli)
+        $now = Carbon::now();
+        $targetDate = $now->hour >= 8 ? $now->toDateString() : $now->copy()->subDay()->toDateString();
         $cacheKey = "dashboard_absensi_stats_{$targetDate}";
         
-        // Cache selama 2 menit (akan auto-clear via Observer saat ada perubahan data)
-        return Cache::remember($cacheKey, now()->addMinutes(2), function () use ($targetDate) {
+        \Illuminate\Support\Facades\Log::info("DashboardWidget: Using cache key {$cacheKey} for target date {$targetDate}");
+        
+        // PERBAIKAN: Cache lebih pendek untuk debugging dan gunakan seconds
+        return Cache::remember($cacheKey, 60, function () use ($targetDate) {
             \Illuminate\Support\Facades\Log::info("DashboardWidget: Generating fresh data for {$targetDate}");
             
             // Query data
@@ -55,8 +57,12 @@ class DashboardKaryawanHadirWidget extends BaseWidget
             // Hitung persentase kehadiran
             $persentaseKehadiran = $totalKaryawan > 0 ? round(($karyawanHadir / $totalKaryawan) * 100, 1) : 0;
             
-            // Debug log hasil
-            \Illuminate\Support\Facades\Log::info("DashboardWidget: Hadir={$karyawanHadir}, Sakit={$karyawanSakit}, Izin={$karyawanIzin}, Alfa={$karyawanAlfa}, Persentase={$persentaseKehadiran}%");
+            // Debug log hasil dengan lebih detail
+            \Illuminate\Support\Facades\Log::info("DashboardWidget: Target Date={$targetDate}, Total={$totalKaryawan}, Hadir={$karyawanHadir}, Sakit={$karyawanSakit}, Izin={$karyawanIzin}, Persentase={$persentaseKehadiran}%");
+            
+            // Tambahan: Log raw query untuk debugging
+            $hadirQuery = Absensi::whereDate('tanggal', $targetDate)->where('status', 'Hadir')->toSql();
+            \Illuminate\Support\Facades\Log::info("DashboardWidget: Query hadir = {$hadirQuery}");
             
             // Data chart untuk 7 hari terakhir
             $chartData = [];
@@ -67,31 +73,31 @@ class DashboardKaryawanHadirWidget extends BaseWidget
             }
             
             return [
-                Stat::make('Karyawan Hadir Hari Ini', $karyawanHadir)
-                    ->description('Total: ' . $totalKaryawan . ' karyawan')
+                Stat::make('Total Hadir Hari Ini', $karyawanHadir)
+                    ->description('Staff Hadir')
                     ->descriptionIcon('heroicon-m-user-group')
                     ->color($persentaseKehadiran >= 80 ? 'success' : ($persentaseKehadiran >= 60 ? 'warning' : 'danger'))
                     ->chart($chartData),
                     
-                Stat::make('Persentase Kehadiran', $persentaseKehadiran . '%')
-                    ->description('Tingkat kehadiran')
-                    ->descriptionIcon('heroicon-m-chart-bar')
-                    ->color($persentaseKehadiran >= 80 ? 'success' : ($persentaseKehadiran >= 60 ? 'warning' : 'danger')),
-                    
-                Stat::make('Sakit', $karyawanSakit)
-                    ->description('Karyawan sakit')
+                Stat::make('Total Sakit Hari Ini', $karyawanSakit)
+                    ->description('Staff Sakit')
                     ->descriptionIcon('heroicon-m-heart')
                     ->color('warning'),
                     
-                Stat::make('Izin', $karyawanIzin)
-                    ->description('Karyawan izin')
+                Stat::make('Total Izin Hari Ini', $karyawanIzin)
+                    ->description('Staff Izin')
                     ->descriptionIcon('heroicon-m-clock')
                     ->color('info'),
+
+                  Stat::make('Persentase Kehadiran', $persentaseKehadiran . '%')
+                    ->description('Total : ' . $totalKaryawan . ' Staff')
+                    ->descriptionIcon('heroicon-m-chart-bar')
+                    ->color($persentaseKehadiran >= 80 ? 'success' : ($persentaseKehadiran >= 60 ? 'warning' : 'danger')),
                     
-                Stat::make('Alfa', $karyawanAlfa)
-                    ->description('Tidak ada keterangan')
-                    ->descriptionIcon('heroicon-m-x-circle')
-                    ->color('danger'),
+                // Stat::make('Alfa', $karyawanAlfa)
+                //     ->description('Tidak ada keterangan')
+                //     ->descriptionIcon('heroicon-m-x-circle')
+                //     ->color('danger'),
             ];
         });
     }
